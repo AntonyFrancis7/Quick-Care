@@ -246,24 +246,28 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Status footer */}
-        <div style={{ padding: "14px 18px", borderTop: "1px solid var(--header-border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: connected ? "#2ed573" : "#ff4757",
-                boxShadow: connected ? "0 0 8px #2ed573" : "0 0 8px #ff4757",
-              }}
-            />
-            <span style={{ fontSize: 11, color: "var(--header-muted)" }}>
-              {connected ? "Live monitoring" : "Connecting..."}
-            </span>
-          </div>
-          <div style={{ fontSize: 10, color: "var(--header-muted)", marginTop: 6 }}>
-            40 patients · 6 caregivers
+        {/* Admin Profile */}
+        <div style={{ padding: "14px 16px", borderTop: "1px solid var(--header-border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Avatar */}
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: "linear-gradient(135deg, #2d6abf, #54a0ff)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 14, fontWeight: 800, color: "#fff", flexShrink: 0,
+            }}>
+              A
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--header-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                Admin
+              </div>
+              <div style={{ marginTop: 2 }}>
+                <span style={{ fontSize: 10, color: "var(--header-muted)" }}>
+                  System Admin
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
