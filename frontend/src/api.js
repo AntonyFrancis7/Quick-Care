@@ -57,7 +57,10 @@ export const api = {
 
 // WebSocket helper
 export function createWS(onMessage, caretakerId = null, caretakerEmail = null) {
-  let wsUrl = "ws://localhost:8000/ws";
+  let wsUrl =
+    (process.env.REACT_APP_API_URL || "http://localhost:8000")
+      .replace("https://", "wss://")
+      .replace("http://", "ws://") + "/ws";
   if (caretakerId && caretakerEmail) {
     wsUrl += `?caretaker_id=${caretakerId}&caretaker_email=${caretakerEmail}`;
   }

@@ -1,4 +1,16 @@
+# Dependencies
 node_modules
+
+# Environment variables (never commit local secrets)
 .env
+
+# Build outputs
 dist
 build
+frontend/build
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
