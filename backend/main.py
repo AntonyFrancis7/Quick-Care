@@ -89,6 +89,11 @@ class AssignRequest(BaseModel):
 
 STORE: Dict = {"patients": {}, "caregivers": {}, "alarms": [], "assignments": [], "alarm_stats": {"total": 0, "critical": 0, "acked": 0}}
 WS_CLIENTS: Dict = {}  # Format: {ws: {"caretaker_email": str, "caretaker_id": str}}
+SIMULATION_RUNNING: bool = False  # Off by default — admin must start it manually
+# Key: (patient_id, alarm_type_str) — Value: {"cg_id", "alarm_id", "since"}
+ACTIVE_INCIDENTS: Dict = {}
+# Key: caregiver_id — Value: datetime of last alert received (for cooldown)
+CARETAKER_RECENT_ALERTS: Dict = {}
 
 # ─── Seed ────────────────────────────────────────────────────────────────────
 _NAMES = ["Mary Smith","John Jones","Alice Brown","Bob Davis","Carol Wilson","David Moore",
@@ -100,12 +105,18 @@ _NAMES = ["Mary Smith","John Jones","Alice Brown","Bob Davis","Carol Wilson","Da
           "Iris Thomas","Jake Jackson","Kira White","Louis Harris"]
 
 _CG_RAW = [
+    # Original staff
     {"name":"Maria John",  "email":"maria@gmail.com", "role":"senior_nurse","floor":1,"skills":["cardiac","dementia"]},
     {"name":"James Lee",   "email":"james@gmail.com", "role":"nurse",       "floor":1,"skills":["diabetes","mobility"]},
     {"name":"Priya Mehta", "email":"priya@gmail.com", "role":"caregiver",   "floor":2,"skills":["respiratory"]},
-    {"name":"Tom Walsh",   "email":"tom@gmail.com", "role":"caregiver",   "floor":2,"skills":["mobility","fall"]},
-    {"name":"Lisa Chen",   "email":"lisa@gmail.com", "role":"nurse",       "floor":3,"skills":["cardiac","respiratory"]},
-    {"name":"Sam Okafor",  "email":"sam@gmail.com", "role":"caregiver",   "floor":3,"skills":["dementia","wandering"]},
+    {"name":"Tom Walsh",   "email":"tom@gmail.com",   "role":"caregiver",   "floor":2,"skills":["mobility","fall"]},
+    {"name":"Lisa Chen",   "email":"lisa@gmail.com",  "role":"nurse",       "floor":3,"skills":["cardiac","respiratory"]},
+    {"name":"Sam Okafor",  "email":"sam@gmail.com",   "role":"caregiver",   "floor":3,"skills":["dementia","wandering"]},
+    # New staff
+    {"name":"Anna Rivera", "email":"anna@gmail.com",  "role":"senior_nurse","floor":1,"skills":["cardiac","respiratory"]},
+    {"name":"Ben Carter",  "email":"ben@gmail.com",   "role":"nurse",       "floor":2,"skills":["cardiac","diabetes"]},
+    {"name":"Clara Nwosu", "email":"clara@gmail.com", "role":"senior_nurse","floor":2,"skills":["respiratory","dementia"]},
+    {"name":"David Kim",   "email":"david@gmail.com", "role":"nurse",       "floor":3,"skills":["cardiac","mobility","fall"]},
 ]
 
 CAREGIVER_EMAIL_MAP = {}  # Maps email to caregiver_id
@@ -143,8 +154,8 @@ _seed()
 # AI SCORING ENGINE
 # ══════════════════════════════════════════════════════════════════════════════
 
-_WEIGHTS = {"workload": 0.25, "proximity": 0.20, "status": 0.20,
-            "skill": 0.15, "fairness": 0.10, "eta": 0.10}
+_WEIGHTS = {"workload": 0.20, "proximity": 0.15, "status": 0.15,
+            "skill": 0.15, "fairness": 0.25, "eta": 0.10}
 _STATUS_SCORE = {"available":1.0,"attending":0.5,"on_rounds":0.4,"on_break":0.1,"out_of_premises":0.0}
 _SKILL_MAP = {"cardiac":["cardiac","senior_nurse"],"fall":["mobility","fall"],
               "wandering":["dementia","wandering"],"spo2":["respiratory","nurse"],
@@ -166,6 +177,10 @@ def _score(cg: Caregiver, patient_floor: int, alarm_type: str, severity: str) ->
     if severity=="critical" and cg.status.value in ("on_break","out_of_premises"): total *= 0.3
     if cg.alarms >= 3: total *= 0.6
     if len(cg.patients) >= 10: total *= 0.85
+    # 🕒 5-minute cooldown: penalise caretakers who just received an alert
+    last = CARETAKER_RECENT_ALERTS.get(cg.id)
+    if last and (datetime.now() - last).seconds < 300:
+        total *= 0.45  # Heavy penalty — give others a chance
     return {"id":cg.id,"name":cg.name,"role":cg.role,"floor":cg.floor,
             "status":cg.status.value,"score":round(total,1),"breakdown":bd,"eta":cg.eta}
 
@@ -210,33 +225,54 @@ def _tick_vitals():
         v.temperature = _drift(v.temperature, 98.6, 0.15, 95, 104)
         v.hrv         = _drift(v.hrv, 45, 2, 10, 80)
         v.updated     = datetime.now().isoformat()
-        # Disease amplification
-        if p.disease.value=="cardiac" and random.random()<0.04:
-            v.heart_rate = max(40, min(160, v.heart_rate + random.choice([-18,22,28])))
-        if p.disease.value=="respiratory" and random.random()<0.035:
-            v.spo2 = max(84, v.spo2 - random.uniform(2,5))
+        # ── Disease amplification ──────────────────────────────────────────
+        if p.disease.value == "cardiac" and random.random() < 0.04:
+            v.heart_rate = max(40, min(160, v.heart_rate + random.choice([-18, 22, 28])))
+        if p.disease.value == "respiratory" and random.random() < 0.035:
+            v.spo2 = max(84, v.spo2 - random.uniform(2, 5))
+        if p.disease.value == "dementia" and random.random() < 0.03:
+            # Erratic HR and BP spikes are common in dementia patients
+            v.heart_rate = max(45, min(155, v.heart_rate + random.choice([-15, 18, 20])))
+            v.bp_sys = max(90, min(195, v.bp_sys + random.choice([-20, 25, 30])))
+        if p.disease.value == "diabetes" and random.random() < 0.03:
+            # Blood glucose fluctuation mimicked via BP and HR variation
+            v.bp_sys = max(90, min(195, v.bp_sys + random.choice([-15, 20, 25])))
         # Risk
-        base = p.intensity*8.0
-        if v.heart_rate>120: base+=12
-        if v.spo2<88: base+=25
-        elif v.spo2<92: base+=15
-        if v.bp_sys>180: base+=20
+        base = p.intensity * 8.0
+        if v.heart_rate > 120: base += 12
+        if v.spo2 < 88: base += 25
+        elif v.spo2 < 92: base += 15
+        if v.bp_sys > 180: base += 20
         p.risk = min(100, round(base, 1))
-        # Check alarms
+        # ── Vitals-threshold alarms ────────────────────────────────────────
         alm = None
-        if v.heart_rate>THRESHOLDS["heart_rate"]["crit"]:
+        if v.heart_rate > THRESHOLDS["heart_rate"]["crit"]:
             alm = AlarmEvent(patient_id=p.id, patient_name=p.name, room=p.room, floor=p.floor,
                              type=AlarmType.CARDIAC, severity=Severity.CRITICAL,
                              value=v.heart_rate, threshold=THRESHOLDS["heart_rate"]["crit"])
-        elif v.spo2<THRESHOLDS["spo2"]["crit"]:
+        elif v.spo2 < THRESHOLDS["spo2"]["crit"]:
             alm = AlarmEvent(patient_id=p.id, patient_name=p.name, room=p.room, floor=p.floor,
                              type=AlarmType.SPO2, severity=Severity.CRITICAL,
                              value=v.spo2, threshold=THRESHOLDS["spo2"]["crit"])
-        elif v.heart_rate>THRESHOLDS["heart_rate"]["high"]:
+        elif v.heart_rate > THRESHOLDS["heart_rate"]["high"]:
             alm = AlarmEvent(patient_id=p.id, patient_name=p.name, room=p.room, floor=p.floor,
                              type=AlarmType.CARDIAC, severity=Severity.WARNING,
                              value=v.heart_rate, threshold=THRESHOLDS["heart_rate"]["high"])
+        # ── Event-based: Fall (mobility, 2% per tick) ──────────────────────
+        if alm is None and p.disease.value == "mobility" and random.random() < 0.02:
+            alm = AlarmEvent(patient_id=p.id, patient_name=p.name, room=p.room, floor=p.floor,
+                             type=AlarmType.FALL, severity=Severity.WARNING, value=0, threshold=0)
+            print(f"🤕 FALL EVENT: {p.name} Room {p.room}")
+        # ── Event-based: Wandering (dementia, 1.5% per tick) ───────────────
+        if alm is None and p.disease.value == "dementia" and random.random() < 0.015:
+            alm = AlarmEvent(patient_id=p.id, patient_name=p.name, room=p.room, floor=p.floor,
+                             type=AlarmType.WANDERING, severity=Severity.WARNING, value=0, threshold=0)
+            print(f"🚶 WANDERING EVENT: {p.name} Room {p.room}")
         if alm:
+            # 🔒 Suppress if a caretaker is already actively attending this patient+type
+            if (p.id, alm.type.value) in ACTIVE_INCIDENTS:
+                print(f"🔒 Suppressed alarm for {p.name} ({alm.type}) — caretaker already attending")
+                continue
             # Deduplicate: skip if same patient+type alarm in last 3 min
             recent = [a for a in STORE["alarms"][-30:] if a.patient_id==p.id and a.type==alm.type]
             if not recent or (datetime.now()-datetime.fromisoformat(recent[-1].ts)).seconds > 180:
@@ -248,10 +284,19 @@ def _tick_vitals():
                 if len(top_3) > 0: alm.primary_cg_id = top_3[0].id; alm.primary_cg_name = top_3[0].name
                 if len(top_3) > 1: alm.secondary_cg_id = top_3[1].id; alm.secondary_cg_name = top_3[1].name
                 if len(top_3) > 2: alm.tertiary_cg_id = top_3[2].id; alm.tertiary_cg_name = top_3[2].name
-                
+
                 STORE["alarms"].append(alm); STORE["alarm_stats"]["total"]+=1
                 if alm.severity==Severity.CRITICAL: STORE["alarm_stats"]["critical"]+=1
                 new_alarms.append(alm)
+                # 🕒 Record alert timestamp for cooldown (only primary caretaker)
+                if alm.primary_cg_id:
+                    CARETAKER_RECENT_ALERTS[alm.primary_cg_id] = datetime.now()
+                # 🔒 Immediately lock this patient+type — no more alarms until caretaker resolves
+                ACTIVE_INCIDENTS[(p.id, alm.type.value)] = {
+                    "cg_id": alm.primary_cg_id,
+                    "alarm_id": alm.id,
+                    "since": datetime.now().isoformat()
+                }
                 print(f"🚨 NEW ALARM: {alm.id} - {p.name} ({alm.type}) assigned to: {alm.primary_cg_name}/{alm.primary_cg_id}")
     if new_alarms:
         print(f"📤 Returning {len(new_alarms)} alarms from _tick_vitals")
@@ -320,13 +365,33 @@ async def broadcast_alarm_update(alm: AlarmEvent):
     for d in dead:
         if d in WS_CLIENTS: del WS_CLIENTS[d]
 
+# ── Simulation Control ───────────────────────────────────────────────────────
+@app.get("/simulation/status")
+def simulation_status():
+    return {"running": SIMULATION_RUNNING}
+
+@app.post("/simulation/start")
+def simulation_start():
+    global SIMULATION_RUNNING
+    SIMULATION_RUNNING = True
+    print("▶ Simulation STARTED by admin")
+    return {"running": True}
+
+@app.post("/simulation/stop")
+def simulation_stop():
+    global SIMULATION_RUNNING
+    SIMULATION_RUNNING = False
+    print("⏹ Simulation STOPPED by admin")
+    return {"running": False}
+
 @app.on_event("startup")
 async def start_simulator():
     async def _loop():
         while True:
             await asyncio.sleep(6)
-            new_alarms = _tick_vitals()
-            await broadcast_alarms(new_alarms)
+            if SIMULATION_RUNNING:
+                new_alarms = _tick_vitals()
+                await broadcast_alarms(new_alarms)
     asyncio.create_task(_loop())
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -388,7 +453,7 @@ def ack_alarm(aid:str, cg_id:str=""):
 
 @app.post("/alarms/{aid}/caretaker-ack")
 async def caretaker_ack_alarm(aid:str, cg_id:str=""):
-    """Caretaker acknowledges receiving the alert"""
+    """Caretaker acknowledges receiving the alert — also creates an active incident."""
     real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id)
     for a in STORE["alarms"]:
         if a.id == aid:
@@ -408,11 +473,100 @@ async def caretaker_ack_alarm(aid:str, cg_id:str=""):
                 a.ack_by = real_cg_id
                 STORE["alarm_stats"]["acked"]+=1
                 await broadcast_alarm_update(a)
+
+            # 🔒 Register active incident to suppress duplicate alarms
+            incident_key = (a.patient_id, a.type.value)
+            if incident_key not in ACTIVE_INCIDENTS:
+                ACTIVE_INCIDENTS[incident_key] = {
+                    "cg_id": real_cg_id,
+                    "alarm_id": aid,
+                    "since": datetime.now().isoformat()
+                }
+                print(f"🔒 Active incident created: patient={a.patient_id} type={a.type.value} cg={real_cg_id}")
                 
             return {"ok": True, "acknowledged": True}
     raise HTTPException(404)
 
-# ── AI Assignment ─────────────────────────────────────────────────────────────
+@app.post("/alarms/{aid}/resolve")
+async def resolve_alarm(aid:str, cg_id:str=""):
+    """Caretaker marks incident resolved — clears active incident, re-enables monitoring."""
+    real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id)
+    for a in STORE["alarms"]:
+        if a.id == aid:
+            incident_key = (a.patient_id, a.type.value)
+            removed = ACTIVE_INCIDENTS.pop(incident_key, None)
+            print(f"✅ Incident resolved: patient={a.patient_id} type={a.type.value} by={real_cg_id} (was={removed})")
+            # Broadcast to all connected clients
+            dead = []
+            for ws, client_info in list(WS_CLIENTS.items()):
+                try:
+                    await ws.send_text(json.dumps({
+                        "type": "incident_resolved",
+                        "alarm_id": aid,
+                        "patient_id": a.patient_id,
+                        "patient_name": a.patient_name,
+                        "ts": datetime.now().isoformat()
+                    }))
+                except Exception:
+                    dead.append(ws)
+            for d in dead:
+                if d in WS_CLIENTS: del WS_CLIENTS[d]
+            return {"ok": True, "resolved": True}
+    raise HTTPException(404)
+
+@app.post("/alarms/{aid}/transfer")
+async def transfer_alarm(aid: str, from_cg_id: str = ""):
+    """Transfer alert from primary→secondary or secondary→tertiary caretaker."""
+    real_from_id = CAREGIVER_EMAIL_MAP.get(from_cg_id, from_cg_id)
+    for a in STORE["alarms"]:
+        if a.id == aid:
+            # Determine who to transfer TO
+            if real_from_id == a.primary_cg_id:
+                to_cg_id   = a.secondary_cg_id
+                to_cg_name = a.secondary_cg_name
+                new_priority = "secondary"
+            elif real_from_id == a.secondary_cg_id:
+                to_cg_id   = a.tertiary_cg_id
+                to_cg_name = a.tertiary_cg_name
+                new_priority = "tertiary"
+            else:
+                raise HTTPException(403, "Not the current responsible caretaker")
+
+            if not to_cg_id:
+                raise HTTPException(400, "No next caretaker available to transfer to")
+
+            # Update ACTIVE_INCIDENTS so the new caretaker is responsible
+            incident_key = (a.patient_id, a.type.value)
+            ACTIVE_INCIDENTS[incident_key] = {
+                "cg_id": to_cg_id,
+                "alarm_id": aid,
+                "since": datetime.now().isoformat()
+            }
+            print(f"🔀 Alarm {aid} transferred: {real_from_id} → {to_cg_id} ({new_priority})")
+
+            dead = []
+            for ws, client_info in list(WS_CLIENTS.items()):
+                try:
+                    cg_id = client_info.get("caretaker_id")
+                    real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id) if cg_id else None
+                    if real_cg_id == real_from_id:
+                        # Cancel alert on sender's dashboard
+                        await ws.send_text(json.dumps({"type": "cancel_alert", "alarm_id": aid}))
+                    elif real_cg_id == to_cg_id:
+                        # Deliver alert to receiver's dashboard
+                        await ws.send_text(json.dumps({
+                            "type": "caretaker_alert",
+                            "alarm": a.dict(),
+                            "priority": new_priority,
+                            "ts": datetime.now().isoformat()
+                        }))
+                except Exception:
+                    dead.append(ws)
+            for d in dead:
+                if d in WS_CLIENTS: del WS_CLIENTS[d]
+            return {"ok": True, "transferred_to": to_cg_id, "priority": new_priority}
+    raise HTTPException(404)
+
 @app.post("/assign")
 def assign(req: AssignRequest):
     p = STORE["patients"].get(req.patient_id)

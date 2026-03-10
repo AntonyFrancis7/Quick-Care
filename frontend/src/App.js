@@ -1,6 +1,6 @@
 // src/App.js — Root application shell
-import { useState, useEffect, useRef } from "react";
-import { createWS } from "./api";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createWS, api } from "./api";
 import Login from "./pages/Login";
 import Overview from "./pages/Overview";
 import Caregivers from "./pages/Caregivers";
@@ -35,7 +35,22 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [theme, setTheme] = useState("dark");
+  const [simRunning, setSimRunning] = useState(false);
   const wsRef = useRef(null);
+
+  // Sync simulation state from backend on mount
+  useEffect(() => {
+    api.simulationStatus().then((res) => {
+      if (res) setSimRunning(res.running);
+    });
+  }, []);
+
+  const toggleSim = useCallback(async () => {
+    const res = simRunning
+      ? await api.stopSimulation()
+      : await api.startSimulation();
+    if (res) setSimRunning(res.running);
+  }, [simRunning]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -326,6 +341,42 @@ export default function App() {
             {NAV.find((n) => n.key === tab)?.label}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* Simulation Toggle */}
+            <button
+              onClick={toggleSim}
+              title={simRunning ? "Stop Simulation" : "Start Simulation"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: simRunning
+                  ? "rgba(255,71,87,0.15)"
+                  : "rgba(46,213,115,0.15)",
+                border: `1px solid ${simRunning ? "#ff475780" : "#2ed57380"}`,
+                color: simRunning ? "#ff4757" : "#2ed573",
+                borderRadius: 8,
+                padding: "5px 12px",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.2s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: simRunning ? "#ff4757" : "#2ed573",
+                  animation: simRunning ? "simPulse 1.2s ease-in-out infinite" : "none",
+                }}
+              />
+              {simRunning ? "Stop Simulation" : "Start Simulation"}
+              <style>{`@keyframes simPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.5)}}`}</style>
+            </button>
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               style={{

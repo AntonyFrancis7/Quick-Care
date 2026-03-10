@@ -10,6 +10,10 @@ const CARETAKER_CREDS = {
   "tom@gmail.com": "tom",
   "lisa@gmail.com": "lisa",
   "sam@gmail.com": "sam",
+  "anna@gmail.com": "anna",
+  "ben@gmail.com": "ben",
+  "clara@gmail.com": "clara",
+  "david@gmail.com": "david",
 };
 
 // Map emails to names for easier reference
@@ -20,6 +24,10 @@ const CARETAKER_NAMES = {
   "tom@gmail.com": "Tom Walsh",
   "lisa@gmail.com": "Lisa Chen",
   "sam@gmail.com": "Sam Okafor",
+  "anna@gmail.com": "Anna Rivera",
+  "ben@gmail.com": "Ben Carter",
+  "clara@gmail.com": "Clara Nwosu",
+  "david@gmail.com": "David Kim",
 };
 
 export default function Login({ onAdminLogin, onCaretakerLogin }) {
@@ -191,7 +199,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             <div style={{ display: "flex", gap: 32 }}>
               {[
                 { val: "40+", label: "Patients" },
-                { val: "6", label: "Caregivers" },
+                { val: "10", label: "Caregivers" },
                 { val: "99.9%", label: "Uptime" },
               ].map((s) => (
                 <div key={s.label}>
@@ -693,17 +701,16 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
               Demo Credentials:
             </div>
             <div style={{ fontSize: 9, color: "#5a6480", lineHeight: 1.6 }}>
-              maria@gmail.com / maria
-              <br />
-              james@gmail.com / james
-              <br />
-              priya@gmail.com / priya
-              <br />
-              tom@gmail.com / tom
-              <br />
-              lisa@gmail.com / lisa
-              <br />
-              sam@gmail.com / sam
+              maria@gmail.com / maria<br />
+              james@gmail.com / james<br />
+              priya@gmail.com / priya<br />
+              tom@gmail.com / tom<br />
+              lisa@gmail.com / lisa<br />
+              sam@gmail.com / sam<br />
+              anna@gmail.com / anna<br />
+              ben@gmail.com / ben<br />
+              clara@gmail.com / clara<br />
+              david@gmail.com / david
             </div>
           </div>
         </div>

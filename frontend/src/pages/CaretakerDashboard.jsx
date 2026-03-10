@@ -64,10 +64,21 @@ const CHECKLISTS = {
 export default function CaretakerDashboard({ userEmail }) {
   const [assignments, setAssignments] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  // Set of alarm IDs that have been acknowledged (active incident created)
+  const [acknowledgedIds, setAcknowledgedIds] = useState(new Set());
   const [checklists, setChecklists] = useState(CHECKLISTS);
   const [expandedChecklist, setExpandedChecklist] = useState("routine_rounds");
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
+  const [theme, setTheme] = useState(
+    () => document.documentElement.getAttribute("data-theme") || "dark"
+  );
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    setTheme(next);
+  };
 
   useEffect(() => {
     (async () => {
@@ -154,6 +165,15 @@ export default function CaretakerDashboard({ userEmail }) {
           if (msg.type === "cancel_alert") {
             console.log("🚫 Canceling alert for patient id", msg.alarm_id);
             setAlerts((prev) => prev.filter((a) => a.id !== msg.alarm_id));
+          }
+          if (msg.type === "incident_resolved") {
+            // Another client resolved it — remove card and ack state
+            setAlerts((prev) => prev.filter((a) => a.id !== msg.alarm_id));
+            setAcknowledgedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(msg.alarm_id);
+              return next;
+            });
           }
           if (msg.type === "init") {
             console.log("✅ init message - CaretakerDashboard connected");
@@ -252,6 +272,23 @@ export default function CaretakerDashboard({ userEmail }) {
               {connected ? "Live" : "Offline"}
             </span>
           </div>
+          <button
+            onClick={toggleTheme}
+            title="Toggle Theme"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--text-main)",
+              cursor: "pointer",
+              fontSize: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 4,
+            }}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
         </div>
       </div>
 
@@ -285,7 +322,14 @@ export default function CaretakerDashboard({ userEmail }) {
                     style={{
                       padding: 16,
                       marginBottom: 12,
-                      borderLeft: `4px solid ${alert.severity === "critical" ? "#ff4757" : "#ffa502"}`,
+                      borderLeft: `4px solid ${
+                        acknowledgedIds.has(alert.id)
+                          ? "#2ed573"
+                          : alert.severity === "critical"
+                          ? "#ff4757"
+                          : "#ffa502"
+                      }`,
+                      transition: "border-color 0.4s ease",
                     }}
                   >
                     <div
@@ -314,14 +358,14 @@ export default function CaretakerDashboard({ userEmail }) {
                                 alert.priority === "primary"
                                   ? "#ff475730"
                                   : alert.priority === "secondary"
-                                    ? "#ffa50230"
-                                    : "#54a0ff30",
+                                  ? "#ffa50230"
+                                  : "#54a0ff30",
                               color:
                                 alert.priority === "primary"
                                   ? "#ff4757"
                                   : alert.priority === "secondary"
-                                    ? "#ffa502"
-                                    : "#54a0ff",
+                                  ? "#ffa502"
+                                  : "#54a0ff",
                             }}
                           >
                             {alert.priority ? alert.priority.toUpperCase() : "ALERT"}
@@ -331,73 +375,95 @@ export default function CaretakerDashboard({ userEmail }) {
                           {alert.type?.replace("_", " ").toUpperCase()} •{" "}
                           {alert.alarm_type || "Alert"}
                         </div>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "var(--text-muted)",
-                            marginTop: 4,
-                          }}
-                        >
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                           {alert.timestamp?.toLocaleTimeString()}
                         </div>
-                        {/* Display Backups as requested */}
                         <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", padding: "6px 8px", background: "var(--bg-card-hover)", borderRadius: 6, border: "1px solid var(--border-color)" }}>
                           <div style={{fontWeight: 600, color: "var(--text-main)", marginBottom: 2}}>Backups on standby:</div>
                           {alert.secondary_cg_name && <div>• 2nd: {alert.secondary_cg_name}</div>}
                           {alert.tertiary_cg_name && <div>• 3rd: {alert.tertiary_cg_name}</div>}
                         </div>
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          alignItems: "center",
-                          flexDirection: "column",
-                        }}
-                      >
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexDirection: "column", minWidth: 110 }}>
                         <span
                           style={{
-                            background:
-                              alert.severity === "critical"
-                                ? "#ff475750"
-                                : "#ffa50250",
-                            color:
-                              alert.severity === "critical"
-                                ? "#ff4757"
-                                : "#ffa502",
+                            background: alert.severity === "critical" ? "#ff475750" : "#ffa50250",
+                            color: alert.severity === "critical" ? "#ff4757" : "#ffa502",
                             padding: "4px 10px",
                             borderRadius: 6,
                             fontSize: 11,
                             fontWeight: 700,
                           }}
                         >
-                          {alert.severity || "WARNING"}
+                          {alert.severity?.toUpperCase() || "WARNING"}
                         </span>
-                        <button
-                          onClick={async () => {
-                            await api.caretakerAckAlarm(alert.id, userEmail);
-                            setAlerts(prev => prev.filter(a => a.id !== alert.id));
-                          }}
-                          style={{
-                            background: "#2ed573",
-                            border: "none",
-                            color: "#000",
-                            padding: "6px 12px",
-                            borderRadius: 6,
-                            fontSize: 10,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.target.style.background = "#3fe580")
-                          }
-                          onMouseLeave={(e) =>
-                            (e.target.style.background = "#2ed573")
-                          }
-                        >
-                          ✓ Acknowledge
-                        </button>
+
+                        {!acknowledgedIds.has(alert.id) ? (
+                          /* Step 1 — Acknowledge or Transfer */
+                          <>
+                            <button
+                              onClick={async () => {
+                                await api.caretakerAckAlarm(alert.id, userEmail);
+                                setAcknowledgedIds((prev) => new Set([...prev, alert.id]));
+                              }}
+                              style={{ background: "#2ed573", border: "none", color: "#000", padding: "6px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", width: "100%", transition: "all 0.2s" }}
+                              onMouseEnter={(e) => (e.target.style.background = "#3fe580")}
+                              onMouseLeave={(e) => (e.target.style.background = "#2ed573")}
+                            >
+                              ✓ Acknowledge
+                            </button>
+                            {/* Transfer button — shown only if there is a next caretaker */}
+                            {alert.priority === "primary" && alert.secondary_cg_name && (
+                              <button
+                                onClick={async () => {
+                                  await api.transferAlarm(alert.id, userEmail);
+                                  setAlerts((prev) => prev.filter((a) => a.id !== alert.id));
+                                }}
+                                title={`Transfer to ${alert.secondary_cg_name}`}
+                                style={{ background: "#ffa502", border: "none", color: "#000", padding: "6px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", width: "100%", transition: "all 0.2s" }}
+                                onMouseEnter={(e) => (e.target.style.background = "#ffb733")}
+                                onMouseLeave={(e) => (e.target.style.background = "#ffa502")}
+                              >
+                                🔀 Transfer to 2nd
+                              </button>
+                            )}
+                            {alert.priority === "secondary" && alert.tertiary_cg_name && (
+                              <button
+                                onClick={async () => {
+                                  await api.transferAlarm(alert.id, userEmail);
+                                  setAlerts((prev) => prev.filter((a) => a.id !== alert.id));
+                                }}
+                                title={`Transfer to ${alert.tertiary_cg_name}`}
+                                style={{ background: "#ffa502", border: "none", color: "#000", padding: "6px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", width: "100%", transition: "all 0.2s" }}
+                                onMouseEnter={(e) => (e.target.style.background = "#ffb733")}
+                                onMouseLeave={(e) => (e.target.style.background = "#ffa502")}
+                              >
+                                🔀 Transfer to 3rd
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          /* Step 2 — Attending + Resolve */
+                          <>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#2ed573", display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#2ed573", animation: "simPulse 1.2s ease-in-out infinite" }} />
+                              Attending…
+                              <style>{`@keyframes simPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.5)}}`}</style>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                await api.resolveAlarm(alert.id, userEmail);
+                                setAlerts((prev) => prev.filter((a) => a.id !== alert.id));
+                                setAcknowledgedIds((prev) => { const next = new Set(prev); next.delete(alert.id); return next; });
+                              }}
+                              style={{ background: "#54a0ff", border: "none", color: "#fff", padding: "6px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", width: "100%", transition: "all 0.2s" }}
+                              onMouseEnter={(e) => (e.target.style.background = "#70b3ff")}
+                              onMouseLeave={(e) => (e.target.style.background = "#54a0ff")}
+                            >
+                              ✅ Mark Resolved
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </Card>

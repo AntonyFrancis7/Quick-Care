@@ -53,6 +53,15 @@ export const api = {
   analytics: () => req("/analytics/workload"),
   riskDist: () => req("/analytics/risk-distribution"),
   report: () => req("/analytics/report"),
+  // Simulation control
+  simulationStatus: () => req("/simulation/status"),
+  startSimulation: () => req("/simulation/start", { method: "POST" }),
+  stopSimulation: () => req("/simulation/stop", { method: "POST" }),
+  // Incident resolution
+  resolveAlarm: (id, cgId = "") =>
+    req(`/alarms/${id}/resolve?cg_id=${cgId}`, { method: "POST" }),
+  transferAlarm: (id, fromCgId = "") =>
+    req(`/alarms/${id}/transfer?from_cg_id=${fromCgId}`, { method: "POST" }),
 };
 
 // WebSocket helper
