@@ -73,6 +73,13 @@ export default function CaretakerDashboard({ userEmail }) {
   const [theme, setTheme] = useState(
     () => document.documentElement.getAttribute("data-theme") || "dark"
   );
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -239,7 +246,7 @@ export default function CaretakerDashboard({ userEmail }) {
         style={{
           background: "var(--bg-card)",
           borderBottom: "1px solid var(--border-color)",
-          padding: "0 28px",
+          padding: isMobile ? "0 14px" : "0 24px",
           height: 56,
           display: "flex",
           alignItems: "center",
@@ -292,7 +299,7 @@ export default function CaretakerDashboard({ userEmail }) {
         </div>
       </div>
 
-      <div style={{ padding: "24px 28px" }}>
+      <div style={{ padding: isMobile ? "16px 14px" : "24px 28px" }}>
         <div className="grid-caretaker">
           {/* Main Content */}
           <div>
@@ -384,7 +391,7 @@ export default function CaretakerDashboard({ userEmail }) {
                           {alert.tertiary_cg_name && <div>• 3rd: {alert.tertiary_cg_name}</div>}
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexDirection: "column", minWidth: 110 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexDirection: "column", minWidth: isMobile ? 80 : 110 }}>
                         <span
                           style={{
                             background: alert.severity === "critical" ? "#ff475750" : "#ffa50250",

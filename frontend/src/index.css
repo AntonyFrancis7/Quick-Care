@@ -47,7 +47,9 @@ body {
   background-color: var(--bg-main);
   color: var(--text-main);
   transition: background-color 0.3s ease, color 0.3s ease;
-  zoom: 1.15;
+  min-height: 100vh;
+  width: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Responsive Grid System */
@@ -104,5 +106,13 @@ body {
 
   .card-container {
     padding: 12px !important;
+  }
+
+  .stat-card-component {
+    padding: 14px 16px !important;
+  }
+
+  .stat-card-component div:nth-child(2) {
+    font-size: 24px !important;
   }
 }

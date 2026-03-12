@@ -86,7 +86,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "18px 48px",
+            padding: "18px 20px",
             borderBottom: "1px solid #ffffff0a",
             backdropFilter: "blur(10px)",
             position: "sticky",
@@ -94,19 +94,26 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             zIndex: 10,
           }}
         >
-          <img src="/LOGOlight.png" alt="Quick-Care" style={{ height: 80, width: "auto" }} />
+          <img src="/LOGOlight.png" alt="Quick-Care" style={{ height: 60, width: "auto" }} />
         </nav>
 
         {/* Responsive styles */}
         <style>{`
           .lp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
           .lp-left { padding-right: 60px; }
-          @media (max-width: 768px) {
-            .lp-grid { grid-template-columns: 1fr; }
-            .lp-left { padding-right: 0; margin-top: 32px; order: 2; }
-            .lp-right { order: 1; }
+          @media (max-width: 992px) {
+            .lp-grid { grid-template-columns: 1fr; gap: 40px; }
+            .lp-left { padding-right: 0; order: 2; margin-top: 0; }
+            .lp-right { order: 1; align-self: center !important; }
+            .lp-hero { font-size: 36px !important; text-align: center; }
+            .lp-wrap { padding: 40px 20px !important; }
+            .lp-sub { text-align: center; margin-inline: auto; }
+            .lp-features { margin-inline: auto; max-width: 440px; }
+            .lp-stats { justify-content: center; }
+          }
+           @media (max-width: 768px) {
             .lp-hero { font-size: 32px !important; }
-            .lp-wrap { padding: 28px 20px !important; }
+            .lp-card { padding: 24px !important; }
           }
         `}</style>
 
@@ -119,7 +126,9 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             margin: "0 auto",
             width: "100%",
             padding: "60px 48px",
-            alignItems: "center",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
           }}
         >
           <div className="lp-grid" style={{ alignItems: "center" }}>
@@ -145,6 +154,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             </h1>
 
             <p
+              className="lp-sub"
               style={{
                 fontSize: 15,
                 color: "#7a8aaa",
@@ -159,7 +169,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             </p>
 
             {/* Feature list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 44 }}>
+            <div className="lp-features" style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 44 }}>
               {[
                 { icon: "📊", title: "Real-time Monitoring", desc: "Live vitals tracking across 40+ patients simultaneously" },
                 { icon: "🧠", title: "AI Assignment Engine", desc: "Dynamically assigns caregivers based on workload & proximity" },
@@ -196,7 +206,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
             </div>
 
             {/* Stats row */}
-            <div style={{ display: "flex", gap: 32 }}>
+            <div className="lp-stats" style={{ display: "flex", gap: 32 }}>
               {[
                 { val: "40+", label: "Patients" },
                 { val: "10", label: "Caregivers" },
@@ -218,6 +228,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
 
             {/* Admin Card */}
             <div
+              className="lp-card"
               style={{
                 background: "linear-gradient(135deg, #0b0e1a, #0f1628)",
                 border: "1px solid #1e4a8a",
@@ -272,6 +283,7 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
 
             {/* Caretaker Card */}
             <div
+              className="lp-card"
               style={{
                 background: "linear-gradient(135deg, #0b1a10, #0a160d)",
                 border: "1px solid #1e8a50",
@@ -534,7 +546,6 @@ export default function Login({ onAdminLogin, onCaretakerLogin }) {
           alignItems: "center",
           justifyContent: "center",
           padding: 20,
-          zoom: 0.87,
         }}
       >
         <div

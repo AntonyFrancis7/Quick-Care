@@ -1,16 +1,34 @@
-# Dependencies
-node_modules
+# =========================
+# Node / React
+# =========================
+node_modules/
+dist/
+build/
+frontend/build/
 
-# Environment variables (never commit local secrets)
-.env
-
-# Build outputs
-dist
-build
-frontend/build
-
-# Python
-.venv
-__pycache__
+# =========================
+# Python / FastAPI
+# =========================
+.venv/
+backend/.venv/
+__pycache__/
 *.pyc
-*.pyo
+*.pyo
+*.pyd
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log

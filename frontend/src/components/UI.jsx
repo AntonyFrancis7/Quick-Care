@@ -3,7 +3,7 @@ import { RISK_COLOR, STATUS_COLOR, SEV_COLOR } from "../api";
 
 export function Card({ children, style = {}, glow }) {
   return (
-    <div style={{
+    <div className={`card-component ${glow ? 'glow' : ''}`} style={{
       background: "var(--bg-card)",
       border: `1px solid ${glow ? glow + "40" : "var(--border-color)"}`,
       borderRadius: 16,
@@ -61,7 +61,7 @@ export function WBar({ value, height = 8 }) {
 
 export function StatCard({ icon, label, value, color = "#dde4f0", sub }) {
   return (
-    <Card style={{ padding: "20px 22px" }}>
+    <Card className="stat-card-component" style={{ padding: "20px 22px" }}>
       <div style={{ fontSize: 20, marginBottom: 8 }}>{icon}</div>
       <div style={{ fontSize: 30, fontWeight: 800, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
         {value}
